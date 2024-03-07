@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "subscriptionId": {
+            "value": "00000000-0000-0000-0000-000000000000"
+        },
+        "resourceGroupName": {
+            "value": "yourResourceGroup"
+        },
+        "name": {
+            "value": "yourAppName"
+        },
+        "location": {
+            "value": "YourRegion"
+        },
+        "hostingPlanName": {
+            "value": "ASP-yourResourceGroup-XXXX"
+        },
+        "serverFarmResourceGroup": {
+            "value": "yourResourceGroup"
+        },
+        "alwaysOn": {
+            "value": false
+        },
+        "ftpsState": {
+            "value": "FtpsOnly"
+        },
+        "sku": {
+            "value": "YourSKU"
+        },
+        "skuCode": {
+            "value": "YourSKUCode"
+        },
+        "numberOfWorkers": {
+            "value": "1"
+        },
+        "workerSize": {
+            "value": "0"
+        },
+        "workerSizeId": {
+            "value": "0"
+        },
+        "linuxFxVersion": {
+            "value": "YourLinuxFxVersion"
+        },
+        "dockerRegistryUrl": {
+            "value": "https://your.docker.registry"
+        },
+        "dockerRegistryUsername": {
+            "value": ""
+        },
+        "dockerRegistryPassword": {
+            "value": null
+        },
+        "dockerRegistryStartupCommand": {
+            "value": ""
+        }
+    }
+}
