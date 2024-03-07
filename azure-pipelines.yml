@@ -1,0 +1,115 @@
+trigger:
+  - main
+
+parameters:
+- name: goVersion
+  default: '1.18'
+- name: dockerRepository
+  default: 'yourorganization/yourapp'
+- name: azureSubscription
+  default: 'YourSubscription(00000000-****-****-****-************)'
+- name: appName
+  default: 'your-app-name'
+- name: resourceGroupName
+  default: 'your-resource-group'
+- name: slotName
+  default: 'production'
+
+variables:
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+  artifactStagingDirectory: '$(Build.ArtifactStagingDirectory)'
+  artifactsDirectory: '$(System.ArtifactsDirectory)'
+  dockerTag: '$(Build.BuildId)'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: CI
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildAndTest
+    displayName: 'Build and Test Job'
+    steps:
+    - task: GoTool@0
+      displayName: 'Install Go'
+      inputs:
+        version: ${{ parameters.goVersion }}
+    - task: Go@0
+      displayName: 'Go Get Dependencies'
+      inputs:
+        command: 'get'
+        arguments: '-d'
+        workingDirectory: $(workingDirectory)
+    - task: Go@0
+      displayName: 'Run Go Tests'
+      inputs:
+        command: 'test'
+        arguments: '-v ./tests/...'
+        workingDirectory: $(workingDirectory)
+    - task: Go@0
+      displayName: 'Build Go Application'
+      inputs:
+        command: 'build'
+        workingDirectory: $(workingDirectory)
+    - task: CopyFiles@2
+      displayName: 'Copy Files to Artifact Staging Directory'
+      inputs:
+        TargetFolder: $(artifactStagingDirectory)
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Build Artifacts'
+      inputs:
+        PathtoPublish: $(artifactStagingDirectory)
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+
+- stage: DockerBuild
+  displayName: 'Build and Push Docker Image'
+  dependsOn: CI
+  condition: succeeded('CI')
+  jobs:
+  - job: BuildDockerImage
+    displayName: 'Build and Push Docker Job'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download Build Artifacts'
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'drop'
+        downloadPath: $(artifactsDirectory)
+    - task: Docker@2
+      displayName: 'Build and push docker image'
+      inputs:
+        command: buildAndPush
+        repository: ${{ parameters.dockerRepository }}
+        Dockerfile: '$(artifactsDirectory)/drop/Dockerfile'
+        buildContext: '$(artifactsDirectory)/drop'
+        containerRegistry: 'dockerhub'
+        tags: $(dockerTag)
+
+- stage: Deploy
+  displayName: 'Deploy to Azure App Service'
+  dependsOn: DockerBuild
+  condition: succeeded('DockerBuild')
+  jobs:
+  - job: DeployToAzure
+    displayName: 'Deploy to Azure WebApp for Containers'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download Build Artifacts'
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'drop'
+        downloadPath: $(artifactsDirectory)
+    - task: AzureWebAppContainer@1
+      displayName: 'Deploy to Azure Web App for Containers'
+      inputs:
+        azureSubscription: ${{ parameters.azureSubscription }}
+        appName: ${{ parameters.appName }}
+        deployToSlotOrASE: true
+        resourceGroupName: ${{ parameters.resourceGroupName }}
+        slotName: ${{ parameters.slotName }}
+        containers: '${{ parameters.dockerRepository }}:$(dockerTag)'
+        multicontainerConfigFile: '$(artifactsDirectory)/drop/docker-compose.yml'

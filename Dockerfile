@@ -1,33 +1,38 @@
-FROM golang:1.18.0-buster AS build_base
+# Use a specific version of the golang base image for predictable builds
+FROM golang:1.18.0-buster AS builder
 
-WORKDIR /store
+# Set the working directory inside the container
+WORKDIR /app
 
-COPY go.mod .
-COPY go.sum .
+# Copy go module files first to leverage Docker cache layers, as dependencies change less frequently than code
+COPY go.mod go.sum ./
 
-# Download all depeendencies
+# Download dependencies for caching purposes
 RUN go mod download
 
-FROM build_base AS builder
+# Copy the rest of the application code
+COPY . .
 
-WORKDIR /store
+# Build the Go app as a static binary so it doesn't require C libraries at runtime
+# This improves security and reduces the container size
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
-# Copy all the relevant files
-COPY main.go main.go
-COPY pkg pkg
+# Use a specific version of the Alpine image for runtime to have a stable and secure base
+FROM alpine:3.13
 
-# Create a static build of the package
-RUN CGO_ENABLED=0 go install -ldflags '-extldflags "-static"' .
-
-# Used for the runtime. Nice and light.
-FROM alpine:3.11
-
-# Install certificates that we'll add to the production env
+# Add ca-certificates and tzdata for SSL connections and time zone support
 RUN apk --no-cache add ca-certificates tzdata
 
-# Add the binary
-COPY --from=builder /go/bin/store /store
+# Set the working directory in the container to /root
+# This is where we'll run our app from
+WORKDIR /root/
 
-ENTRYPOINT ["/store"]
+# Copy the statically-linked binary from the builder stage
+COPY --from=builder /app/main .
 
+# Inform Docker that the container is listening on the specified port at runtime.
+# Though this is optional, it's a good practice.
+EXPOSE 8080
 
+# Command to run the binary
+CMD ["./main"]
